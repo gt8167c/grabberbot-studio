@@ -1,0 +1,24 @@
+{
+  "name": "grabberbot-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Simulator + Scratch-style visual programming studio for the UBTECH JIMU GrabberBot",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:artifact": "vite build && node scripts/make-artifact.mjs",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "blockly": "^11.2.2",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.7",
+    "vite-plugin-singlefile": "^2.1.0"
+  }
+}

@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GrabberBot Studio</title>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-glyph">🦾</span>
+        <span class="brand-name">GrabberBot <em>Studio</em></span>
+      </div>
+      <div class="header-status">
+        <button class="chip chip-bt" id="btChip" title="Simulated Bluetooth link">
+          <span class="bt-dot"></span> Jimu_GrabberBot
+        </button>
+        <button class="chip chip-batt" id="battChip" title="Click to plug in / unplug the charger">
+          <span class="pwr-dot" id="pwrDot"></span>
+          <span class="batt-shell"><span class="batt-fill" id="battFill"></span></span>
+          <span id="battPct">100%</span>
+        </button>
+        <button class="chip" id="soundToggle" title="Toggle sounds">🔊</button>
+        <button class="chip" id="helpBtn" title="About this simulator">?</button>
+      </div>
+    </header>
+
+    <main class="app-main" id="appMain">
+      <aside class="studio" id="studioPanel">
+        <nav class="tabbar">
+          <button class="tab active" data-tab="control">🎮<span>Drive</span></button>
+          <button class="tab" data-tab="actions">🎬<span>Actions</span></button>
+          <button class="tab" data-tab="coding">🧩<span>Code</span></button>
+          <button class="tab" data-tab="missions">🏁<span>Missions</span></button>
+        </nav>
+
+        <!-- ============ DRIVE / CONTROL ============ -->
+        <section class="panel active" id="panel-control">
+          <div class="panel-scroll">
+            <div class="card">
+              <div class="card-title">Drive <span class="hint">joystick, WASD or arrow keys</span></div>
+              <div class="drive-row">
+                <div class="joystick" id="joystick">
+                  <div class="joy-ring"></div>
+                  <div class="joy-knob" id="joyKnob"></div>
+                </div>
+                <div class="speed-col">
+                  <div class="speed-label">Servo wheel speed</div>
+                  <div class="speed-presets" id="speedPresets">
+                    <button data-speed="vslow" title="Very slow">🐢</button>
+                    <button data-speed="slow">S</button>
+                    <button data-speed="normal" class="active">N</button>
+                    <button data-speed="fast">F</button>
+                    <button data-speed="vfast" title="Very fast">🐇</button>
+                  </div>
+                  <button class="btn danger wide" id="stopAllBtn">⬛ STOP</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Arm &amp; Claw <span class="hint">servos #3 / #4</span></div>
+              <div class="armclaw">
+                <div class="ac-col">
+                  <label>Arm <b id="armVal">20°</b></label>
+                  <input type="range" id="armSlider" min="-15" max="75" value="20" />
+                  <div class="btn-row">
+                    <button class="btn" id="armUpBtn">⬆ Lift</button>
+                    <button class="btn" id="armDownBtn">⬇ Floor</button>
+                  </div>
+                </div>
+                <div class="ac-col">
+                  <label>Claw <b id="clawVal">55°</b></label>
+                  <input type="range" id="clawSlider" min="0" max="70" value="55" />
+                  <div class="btn-row">
+                    <button class="btn" id="clawOpenBtn">✋ Open</button>
+                    <button class="btn accent" id="clawGrabBtn">🤏 Grab</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">LED eye &amp; sounds</div>
+              <div class="led-row" id="ledSwatches">
+                <button class="swatch" data-color="#ff2d2d" style="--c:#ff2d2d"></button>
+                <button class="swatch" data-color="#ff9f1c" style="--c:#ff9f1c"></button>
+                <button class="swatch" data-color="#ffd21e" style="--c:#ffd21e"></button>
+                <button class="swatch" data-color="#3ddc55" style="--c:#3ddc55"></button>
+                <button class="swatch" data-color="#35d0ff" style="--c:#35d0ff"></button>
+                <button class="swatch" data-color="#7a5cff" style="--c:#7a5cff"></button>
+                <button class="swatch" data-color="#ffffff" style="--c:#ffffff"></button>
+                <button class="swatch off" data-color="off">OFF</button>
+              </div>
+              <div class="sound-row">
+                <button class="btn" data-sound="horn">📯 Horn</button>
+                <button class="btn" data-sound="siren">🚨 Siren</button>
+                <button class="btn" data-sound="chirp">🐦 Chirp</button>
+                <button class="btn" data-sound="laser">✨ Laser</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Action buttons
+                <button class="mini-btn" id="slotEditBtn" title="Reassign slots">✏️ edit</button>
+              </div>
+              <div class="slot-grid" id="slotGrid"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-title">Telemetry</div>
+              <div class="telemetry">
+                <div class="tele-ir">
+                  <div class="tele-label">IR distance</div>
+                  <div class="ir-value" id="irValue">—</div>
+                  <canvas id="irSpark" width="220" height="44"></canvas>
+                </div>
+                <div class="tele-servos" id="teleServos">
+                  <div class="servo-cell"><span>#1 L-tread</span><b id="sv1">0°/s</b></div>
+                  <div class="servo-cell"><span>#2 R-tread</span><b id="sv2">0°/s</b></div>
+                  <div class="servo-cell"><span>#3 arm</span><b id="sv3">20°</b></div>
+                  <div class="servo-cell"><span>#4 claw</span><b id="sv4">55°</b></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ ACTIONS (PRP) ============ -->
+        <section class="panel" id="panel-actions">
+          <div class="panel-scroll">
+            <div class="card">
+              <div class="card-title">Saved actions <span class="hint">Pose · Record · Play</span></div>
+              <div class="action-list" id="actionList"></div>
+              <button class="btn accent wide" id="newActionBtn">➕ New action</button>
+            </div>
+            <div class="card" id="actionEditor" hidden>
+              <div class="card-title">
+                <input id="actionName" class="name-input" placeholder="Action name" maxlength="18" />
+                <span class="icon-pick" id="iconPick"></span>
+              </div>
+              <div class="frames" id="frameList"></div>
+              <div class="btn-row wrap">
+                <button class="btn" id="addFrameBtn">➕ Frame</button>
+                <button class="btn" id="capturePoseBtn">📸 Capture pose</button>
+                <button class="btn" id="previewActionBtn">▶ Preview</button>
+                <button class="btn accent" id="saveActionBtn">💾 Save</button>
+                <button class="btn ghost" id="closeEditorBtn">✕</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ CODING ============ -->
+        <section class="panel" id="panel-coding">
+          <div class="code-toolbar">
+            <button class="run-flag" id="runBtn" title="Run program">▶</button>
+            <button class="stop-flag" id="stopBtn" title="Stop">⬛</button>
+            <label class="turbo"><input type="checkbox" id="turboChk" /> turbo</label>
+            <select id="exampleSel" class="select">
+              <option value="">✨ Examples…</option>
+              <option value="wallstop">🚧 Stop before the wall</option>
+              <option value="grabcarry">🦾 Grab &amp; carry</option>
+              <option value="disco">💃 Disco patrol</option>
+            </select>
+            <button class="mini-btn" id="codePreviewBtn" title="Show program listing">{ }</button>
+            <button class="mini-btn" id="clearWsBtn" title="Clear workspace">🗑</button>
+          </div>
+          <div class="blockly-host" id="blocklyDiv"></div>
+          <pre class="code-preview" id="codePreview" hidden></pre>
+        </section>
+
+        <!-- ============ MISSIONS ============ -->
+        <section class="panel" id="panel-missions">
+          <div class="panel-scroll">
+            <div class="card">
+              <div class="card-title">Missions</div>
+              <div class="mission-list" id="missionList"></div>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <div class="splitter" id="splitter"></div>
+
+      <section class="world" id="worldPane">
+        <div class="viewport" id="viewport"></div>
+        <canvas class="minimap" id="minimap"></canvas>
+        <div class="mission-banner" id="missionBanner" hidden>
+          <span class="mb-icon" id="mbIcon"></span>
+          <div class="mb-text">
+            <b id="mbTitle"></b>
+            <span id="mbProgress"></span>
+          </div>
+          <button class="mini-btn" id="mbAbort">✕</button>
+        </div>
+        <div class="world-hud">
+          <button class="hud-btn" id="camModeBtn" title="Toggle camera follow">🎥 follow</button>
+          <button class="hud-btn" id="resetArenaBtn" title="Reset robot & objects">↺ reset</button>
+        </div>
+        <div class="running-pill" id="runningPill" hidden><span class="spin">🧩</span> program running…</div>
+      </section>
+    </main>
+
+    <div class="modal-back" id="helpModal" hidden>
+      <div class="modal">
+        <div class="modal-title">🦾 GrabberBot Studio</div>
+        <div class="modal-body" id="helpBody"></div>
+        <button class="btn accent" id="helpClose">Got it</button>
+      </div>
+    </div>
+
+    <div class="modal-back" id="winModal" hidden>
+      <div class="modal win">
+        <div class="win-burst">🎉</div>
+        <div class="modal-title" id="winTitle">Mission complete!</div>
+        <div class="modal-body" id="winBody"></div>
+        <button class="btn accent" id="winClose">Awesome!</button>
+      </div>
+    </div>
+
+    <canvas id="confetti"></canvas>
+    <div class="toasts" id="toasts"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
