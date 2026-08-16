@@ -142,10 +142,28 @@ gbs.world.robot.driveDir('forward')
 
 ---
 
+## How the claw grips
+
+The claw servo has a *commanded* angle and an *actual* one, which is what makes
+gripping feel right:
+
+* Commanding the claw shut sets the intent to grip. The fingers then close until
+  their pads meet the object and the servo **stalls** there — it does not close
+  through the load. A crate stops the fingers at 38.9°, a barrel at 45.7°, a ball
+  at 42.3°, each matching that object's real width.
+* Because grip intent lives on the command rather than the angle, a claw straining
+  on a wide crate still counts as holding it.
+* Finger geometry (`CLAW.hingeOffsetX`, `padDistance`, `maxSpreadRad`) is shared by
+  the renderer and the grab solver, so the rendered pads sit exactly where the
+  physics says contact happens.
+
+Higher claw angle = wider opening: 0° is clamped (2.2 cm between the pads) and
+70° is wide open (10.5 cm).
+
 ## Known simplifications
 
-* Cargo is grabbed when it falls inside the claw's reach with the fingers closed;
-  there is no finger-level contact physics.
+* Contact is solved against each object's grip width, not per-finger collision
+  geometry, so the pads meet a barrel's flat sides rather than wrapping its curve.
 * Objects slide rather than tumble, and never stack.
-* The arm is modelled as one straight boom for both physics and rendering, rather
-  than the real two-link boom-and-stick linkage.
+* The arm is modelled as one straight boom for the physics, though it renders as
+  the real boom-and-stick linkage.

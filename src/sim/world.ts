@@ -4,7 +4,7 @@
  * because both need to know about everything in the pen.
  */
 
-import { ARENA, CHASSIS, CLAW, IR, clamp } from './spec';
+import { ARENA, CHASSIS, CLAW, IR, clamp, clawAngleForHalfWidth } from './spec';
 import { Robot } from './robot';
 import { Scheduler } from './scheduler';
 import { audio } from './audio';
@@ -19,6 +19,8 @@ export interface Cargo {
   y: number;
   radius: number;
   height: number;
+  /** Half the width the claw actually pinches — a crate's flat side, not its corner. */
+  gripHalfWidth: number;
   color: string;
   held: boolean;
   /** Spin, purely cosmetic, so pushed cargo looks alive. */
@@ -53,10 +55,11 @@ export interface ArenaSetup {
 
 type WorldEvent = 'grab' | 'drop' | 'bump' | 'deliver';
 
-const CARGO_DEFAULTS: Record<CargoKind, { radius: number; height: number; color: string }> = {
-  crate: { radius: 0.045, height: 0.075, color: '#35d0ff' },
-  barrel: { radius: 0.04, height: 0.09, color: '#ff8a00' },
-  ball: { radius: 0.038, height: 0.076, color: '#7a5cff' },
+const CARGO_DEFAULTS: Record<CargoKind, { radius: number; height: number; color: string; gripScale: number }> = {
+  // A crate is drawn as a box of side radius*1.6, so the claw pinches radius*0.8.
+  crate: { radius: 0.045, height: 0.075, color: '#35d0ff', gripScale: 0.8 },
+  barrel: { radius: 0.04, height: 0.09, color: '#ff8a00', gripScale: 1 },
+  ball: { radius: 0.038, height: 0.076, color: '#7a5cff', gripScale: 1 },
 };
 
 export class World {
@@ -98,14 +101,16 @@ export class World {
     this.cargo = (setup.cargo ?? []).map((c) => {
       const kind = (c.kind ?? 'crate') as CargoKind;
       const d = CARGO_DEFAULTS[kind];
+      const radius = c.radius ?? d.radius;
       return {
         id: c.id ?? `cargo${this.seq++}`,
         kind,
         x: c.x,
         z: c.z,
         y: (c.height ?? d.height) / 2,
-        radius: c.radius ?? d.radius,
+        radius,
         height: c.height ?? d.height,
+        gripHalfWidth: c.gripHalfWidth ?? radius * d.gripScale,
         color: c.color ?? d.color,
         held: false,
         spin: 0,
@@ -130,6 +135,10 @@ export class World {
       color: z.color ?? '#3ddc55',
       label: z.label ?? 'DROP',
     }));
+
+    // Refresh the sensor now, so a program that reads IR on the very first tick
+    // after a reset sees this arena rather than the previous one.
+    this.robot.irDistance = this.readIR();
   }
 
   // ---------------------------------------------------------------- tick
@@ -243,38 +252,48 @@ export class World {
 
     if (this.heldId) {
       const held = this.cargo.find((c) => c.id === this.heldId);
-      if (!held) { this.heldId = null; return; }
+      if (!held) { this.heldId = null; bot.setClawBlock(0); return; }
       if (!bot.isGripping) {
         // Released: the cargo drops straight down where the claw let go.
         held.held = false;
         held.y = held.height / 2;
         this.heldId = null;
+        bot.setClawBlock(0);
         audio.play('drop');
         this.emit('drop', held);
         this.checkDelivery(held);
         return;
       }
+      // Keep the fingers pinched on the surface rather than inside it.
+      bot.setClawBlock(clawAngleForHalfWidth(held.gripHalfWidth));
       held.x = tip.x;
       held.z = tip.z;
       held.y = Math.max(held.height / 2, tip.y);
       return;
     }
 
-    if (!bot.isGripping) return;
-    // Claw just closed — is there anything between the fingers?
+    if (!bot.isGripping) {
+      bot.setClawBlock(0);
+      return;
+    }
+
+    // Commanded to clamp: grab once the pads have actually closed onto something.
     for (const c of this.cargo) {
       if (c.held) continue;
       const d = Math.hypot(c.x - tip.x, c.z - tip.z);
       const vertical = Math.abs(tip.y - c.height / 2);
-      if (d <= CLAW.grabRadius + c.radius && vertical < c.height * 0.9 + 0.03) {
+      const inReach = d <= CLAW.grabRadius + c.radius && vertical < c.height * 0.9 + 0.03;
+      if (inReach && bot.clawHalfGapM <= c.gripHalfWidth + 0.004) {
         c.held = true;
         this.heldId = c.id;
         this.stats.grabs++;
+        bot.setClawBlock(clawAngleForHalfWidth(c.gripHalfWidth));
         audio.play('grab');
         this.emit('grab', c);
         return;
       }
     }
+    bot.setClawBlock(0);
   }
 
   private checkDelivery(c: Cargo): void {

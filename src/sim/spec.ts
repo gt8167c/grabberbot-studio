@@ -64,21 +64,57 @@ export const ARM = {
   /** Arm angle at which the claw sits on the floor. */
   floor: -15,
   carry: 45,
-  /** Boom length used for both physics and the 3D model. */
-  boomLength: 0.135,
-  forearmLength: 0.085,
+  /**
+   * Shoulder pivot to the point between the fingertips. The three segment
+   * lengths below sum to this, so the 3D model and the physics agree on
+   * exactly where the claw closes.
+   */
+  reach: 0.22,
+  boomLength: 0.105,
+  forearmLength: 0.065,
 } as const;
 
 export const CLAW = {
   /** 0° = fully clamped, 70° = wide open. */
   min: 0,
   max: 70,
-  /** At or below this angle the claw is gripping. */
+  /** Commanding at or below this angle means "clamp" — the grip intent. */
   gripAngle: 22,
   openAngle: 55,
   /** Reach of the grab check from the claw centre. */
   grabRadius: 0.062,
+
+  // --- finger geometry, shared by the renderer and the grip solver ---
+  /** Length of a finger, from its hinge to the tip. */
+  fingerLength: 0.062,
+  /** Sideways offset of each finger hinge from the claw centreline. */
+  hingeOffsetX: 0.011,
+  /**
+   * Distance along the finger to the middle of the grip pad. Chosen so the pad
+   * sits at ARM.reach when the claw is closed on typical cargo, which keeps the
+   * rendered pads and the grab solver on the same point.
+   */
+  padDistance: 0.055,
+  /** Finger swing at fully open, in radians. */
+  maxSpreadRad: 0.85,
 } as const;
+
+/** Half the gap between the grip pads at a given claw angle, in metres. */
+export function clawHalfGap(angle: number): number {
+  const spread = (clamp(angle, CLAW.min, CLAW.max) / CLAW.max) * CLAW.maxSpreadRad;
+  return CLAW.hingeOffsetX + CLAW.padDistance * Math.sin(spread);
+}
+
+/**
+ * The claw angle at which the pads first touch something of this half-width —
+ * i.e. where the servo stalls instead of closing further.
+ */
+export function clawAngleForHalfWidth(halfWidth: number): number {
+  const s = (halfWidth - CLAW.hingeOffsetX) / CLAW.padDistance;
+  if (s <= 0) return CLAW.min;
+  const spread = Math.asin(Math.min(1, s));
+  return clamp((spread / CLAW.maxSpreadRad) * CLAW.max, CLAW.min, CLAW.max);
+}
 
 /** IR distance sensor: reports centimetres, saturating at maxRange. */
 export const IR = {

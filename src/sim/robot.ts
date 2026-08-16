@@ -8,7 +8,7 @@
  *   #4 claw         — joint mode
  */
 
-import { ARM, BATTERY, CHASSIS, CLAW, SERVO, SPEED_ORDER, WHEEL_SPEEDS, clamp, servoDegPerSecToMs } from './spec';
+import { ARM, BATTERY, CHASSIS, CLAW, SERVO, SPEED_ORDER, WHEEL_SPEEDS, clamp, clawHalfGap, servoDegPerSecToMs } from './spec';
 import type { SpeedPreset } from './spec';
 import type { Scheduler } from './scheduler';
 import { audio } from './audio';
@@ -35,7 +35,15 @@ export class Robot {
   rightServoDeg = 0;
 
   armAngle = 20;
+  /** Where the claw actually is — may stall short of the command on an object. */
   clawAngle: number = CLAW.openAngle;
+  /**
+   * Where the claw was *told* to go. Grip intent lives here, because a servo
+   * clamped on a crate is still gripping even though it never reached 0°.
+   */
+  clawCommand: number = CLAW.openAngle;
+  /** Mechanical stop set by whatever is between the fingers. 0 = nothing. */
+  clawBlockAngle = 0;
   private armMove: JointMove | null = null;
   private clawMove: JointMove | null = null;
 
@@ -79,15 +87,20 @@ export class Robot {
   /** World position of the point between the claw fingers. */
   get clawTip(): { x: number; z: number; y: number } {
     const rad = (this.armAngle * Math.PI) / 180;
-    const reach = ARM.boomLength + ARM.forearmLength;
-    const fwd = 0.045 + reach * Math.cos(rad);
-    const up = 0.1 + reach * Math.sin(rad);
+    const fwd = 0.045 + ARM.reach * Math.cos(rad);
+    const up = 0.1 + ARM.reach * Math.sin(rad);
     const f = this.forward;
     return { x: this.x + f.x * fwd, z: this.z + f.z * fwd, y: up };
   }
 
+  /** True when the servo is *trying* to clamp, whether or not it got there. */
   get isGripping(): boolean {
-    return this.clawAngle <= CLAW.gripAngle;
+    return this.clawCommand <= CLAW.gripAngle;
+  }
+
+  /** Half the distance between the grip pads right now, in metres. */
+  get clawHalfGapM(): number {
+    return clawHalfGap(this.clawAngle);
   }
 
   get wheelSpeedMs(): { left: number; right: number } {
@@ -130,14 +143,27 @@ export class Robot {
     const t = mv.durSec <= 0 ? 1 : clamp((this.sched.time - mv.startedAt) / mv.durSec, 0, 1);
     // Ease in/out: real servos accelerate and settle, they do not step.
     const e = t * t * (3 - 2 * t);
-    const angle = mv.from + (mv.to - mv.from) * e;
-    if (which === 'arm') this.armAngle = angle;
-    else this.clawAngle = angle;
+    let angle = mv.from + (mv.to - mv.from) * e;
+
+    if (which === 'arm') {
+      this.armAngle = angle;
+    } else {
+      // The fingers cannot pass through whatever they are holding: the servo
+      // stalls against it, exactly like the real one straining on a crate.
+      if (angle < this.clawBlockAngle) angle = this.clawBlockAngle;
+      this.clawAngle = angle;
+    }
 
     if (t >= 1) {
       if (which === 'arm') this.armMove = null;
       else this.clawMove = null;
     }
+  }
+
+  /** Clamp the claw against a mechanical stop (an object between the pads). */
+  setClawBlock(angle: number): void {
+    this.clawBlockAngle = clamp(angle, CLAW.min, CLAW.max);
+    if (this.clawAngle < this.clawBlockAngle) this.clawAngle = this.clawBlockAngle;
   }
 
   // ---------------------------------------------------------------- wheels
@@ -237,8 +263,14 @@ export class Robot {
     if (needed > dur) dur = Math.min(SERVO.maxMoveMs, needed);
 
     const move: JointMove = { from, to: target, startedAt: this.sched.time, durSec: dur / 1000 };
-    if (which === 'arm') this.armMove = move;
-    else this.clawMove = move;
+    if (which === 'arm') {
+      this.armMove = move;
+    } else {
+      this.clawMove = move;
+      this.clawCommand = target;
+      // Opening always releases the stop; it is re-applied once something is held.
+      if (target > this.clawAngle) this.clawBlockAngle = 0;
+    }
     return dur / 1000;
   }
 
@@ -260,7 +292,10 @@ export class Robot {
 
   setClawImmediate(angle: number): void {
     this.clawMove = null;
-    this.clawAngle = clamp(angle, CLAW.min, CLAW.max);
+    const target = clamp(angle, CLAW.min, CLAW.max);
+    this.clawCommand = target;
+    if (target > this.clawAngle) this.clawBlockAngle = 0;
+    this.clawAngle = Math.max(target, this.clawBlockAngle);
   }
 
   openClaw(ms = 450): Promise<void> {
@@ -302,6 +337,8 @@ export class Robot {
     this.armMove = this.clawMove = null;
     this.armAngle = 20;
     this.clawAngle = CLAW.openAngle as number;
+    this.clawCommand = CLAW.openAngle as number;
+    this.clawBlockAngle = 0;
     this.headingTravel = 0;
     this.odometer = 0;
     this.blocked = false;
