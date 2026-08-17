@@ -10,6 +10,11 @@ Nothing talks to real hardware; the Bluetooth chip in the header is decorative.
 Four tabs — **Drive**, **Actions**, **Code**, **Missions** — beside a live 3D
 arena with a top-down minimap.
 
+### ▶ [Play it now](https://gt8167c.github.io/grabberbot-studio/)
+
+No install, no sign-in — it runs entirely in your browser. The site redeploys
+from `main` on every push, so that link always matches the code here.
+
 ---
 
 ## Running it
